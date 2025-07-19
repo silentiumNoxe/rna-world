@@ -138,12 +138,12 @@ export class WorldScene extends Scene {
 
             createCells(count) {
         const cellColors = [
-            '#3b82f6', // Blue
-            '#ef4444', // Red
-            '#10b981', // Green
-            '#f59e0b', // Orange
-            '#6366f1', // Purple
-            '#ec4899'  // Pink
+            '#6b7280', // Gray
+            '#78716c', // Warm Gray
+            '#64748b', // Slate
+            '#475569', // Steel Blue
+            '#57534e', // Stone
+            '#44403c'  // Brown
         ];
 
         for (let i = 0; i < count; i++) {
@@ -505,24 +505,29 @@ export class WorldScene extends Scene {
             sulfur: 'rgba(160, 220, 180, 0.7)'
         };
 
-        let lineY = y + 35;
-        for (const [resource, label] of Object.entries(resourceLabels)) {
-            const amount = this.playerCell.resources[resource] || 0;
-            const percentage = amount / this.playerCell.resourceCapacity;
+        // Use the first selected cell for resource display
+        if (this.overseer.selectedCells.length > 0) {
+            const selectedCell = this.overseer.selectedCells[0];
 
-            // Draw label
-            this.ctx.fillStyle = 'white';
-            this.ctx.fillText(label + ':', x + 10, lineY);
+            let lineY = y + 35;
+            for (const [resource, label] of Object.entries(resourceLabels)) {
+                const amount = selectedCell.resources[resource] || 0;
+                const percentage = amount / selectedCell.resourceCapacity;
 
-            // Draw bar background
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            this.ctx.fillRect(x + 70, lineY - 10, 80, 12);
+                // Draw label
+                this.ctx.fillStyle = 'white';
+                this.ctx.fillText(label + ':', x + 10, lineY);
 
-            // Draw bar fill
-            this.ctx.fillStyle = resourceColors[resource];
-            this.ctx.fillRect(x + 70, lineY - 10, 80 * percentage, 12);
+                // Draw bar background
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                this.ctx.fillRect(x + 70, lineY - 10, 80, 12);
 
-            lineY += 15;
+                // Draw bar fill
+                this.ctx.fillStyle = resourceColors[resource];
+                this.ctx.fillRect(x + 70, lineY - 10, 80 * percentage, 12);
+
+                lineY += 15;
+            }
         }
 
         this.ctx.restore();
@@ -565,10 +570,12 @@ export class WorldScene extends Scene {
         // Update any size-dependent variables for RNA simulation
         console.log('World scene resized');
 
-        if (this.playerCell) {
-            // Adjust player position when canvas is resized
-            this.playerCell.x = Math.min(this.playerCell.x, this.canvas.width);
-            this.playerCell.y = Math.min(this.playerCell.y, this.canvas.height);
+        // Adjust selected cells if needed
+        if (this.overseer && this.overseer.selectedCells.length > 0) {
+            for (const cell of this.overseer.selectedCells) {
+                cell.x = Math.min(cell.x, this.canvas.width);
+                cell.y = Math.min(cell.y, this.canvas.height);
+            }
         }
     }
 }
