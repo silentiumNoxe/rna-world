@@ -14,7 +14,8 @@ function randomInt(min, max) {
 
 // Generate a random color
 function randomColor() {
-    return `hsl(${randomInt(0, 360)}, ${randomInt(70, 100)}%, ${randomInt(40, 60)}%)`;
+    // Use more subdued colors with lower saturation and lightness
+    return `hsl(${randomInt(200, 260)}, ${randomInt(20, 40)}%, ${randomInt(30, 50)}%)`;
 }
 
 // Calculate distance between two points

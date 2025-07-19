@@ -27,28 +27,71 @@ export class Nucleotide {
     }
 
     draw(ctx) {
-        // Draw nucleotide circle
+        // Визначаємо колір нуклеотиду для мікроскопічного вигляду
+        let microscopeColor;
+        switch (this.type) {
+            case 'A': microscopeColor = 'rgba(170, 210, 200, 0.7)'; break; // A - світло-бірюзовий
+            case 'U': microscopeColor = 'rgba(160, 200, 210, 0.7)'; break; // U - голубий
+            case 'G': microscopeColor = 'rgba(180, 200, 190, 0.7)'; break; // G - сіро-зелений
+            case 'C': microscopeColor = 'rgba(190, 210, 200, 0.7)'; break; // C - м'ятний
+            default: microscopeColor = 'rgba(180, 200, 200, 0.7)';
+        }
+
+        // Основна форма нуклеотиду - трохи неправильна (для більшої реалістичності)
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
+
+        // Додаємо невеликі нерівності контуру
+        const segments = 8;
+        const angleStep = Math.PI * 2 / segments;
+
+        for (let i = 0; i <= segments; i++) {
+            const angle = i * angleStep;
+            const radiusVariation = 0.85 + Math.random() * 0.3; // 0.85-1.15
+            const x = this.x + Math.cos(angle) * this.radius * radiusVariation;
+            const y = this.y + Math.sin(angle) * this.radius * radiusVariation;
+
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+
+        ctx.closePath();
+
+        // Градієнт для ефекту об'єму
+        const gradient = ctx.createRadialGradient(
+            this.x - this.radius * 0.3, this.y - this.radius * 0.3, 0,
+            this.x, this.y, this.radius
+        );
+        gradient.addColorStop(0, microscopeColor);
+        gradient.addColorStop(1, microscopeColor.replace('0.7', '0.5'));
+
+        ctx.fillStyle = gradient;
         ctx.fill();
 
-        // Draw outline
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        // Тонкий контур
+        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = 'rgba(220, 240, 240, 0.4)';
         ctx.stroke();
 
-        // Draw nucleotide letter
-        ctx.fillStyle = this.textColor;
-        ctx.font = `${this.radius}px Arial`;
+        // Позначаємо тип нуклеотиду більш тонко, як різниця в структурі
+        ctx.fillStyle = 'rgba(230, 250, 250, 0.2)';
+        ctx.font = `${this.radius * 0.8}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(this.type, this.x, this.y);
 
-        // Add a highlight effect
+        // Додаємо внутрішню структуру замість простого відблиску
         ctx.beginPath();
-        ctx.arc(this.x - this.radius * 0.3, this.y - this.radius * 0.3, this.radius * 0.2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.arc(
+            this.x - this.radius * 0.2, 
+            this.y - this.radius * 0.2, 
+            this.radius * 0.4, 
+            0, 
+            Math.PI * 2
+        );
+        ctx.fillStyle = 'rgba(230, 250, 250, 0.15)';
         ctx.fill();
     }
 

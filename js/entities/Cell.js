@@ -1,10 +1,10 @@
 export class Cell {
-    constructor(x, y, radius, color, isPlayer = true) {
+    constructor(x, y, radius, color, isSelected = false) {
         this.x = x;
         this.y = y;
         this.radius = radius;
         this.color = color;
-        this.isPlayer = isPlayer;
+        this.isSelected = isSelected;
 
         // Movement properties
         this.speed = 0.5 + Math.random() * 1.5;
@@ -14,7 +14,7 @@ export class Cell {
 
         // For particle effect
         this.particles = [];
-        if (isPlayer) {
+        if (isSelected) {
             this.createParticles(15);
         }
 
@@ -26,7 +26,7 @@ export class Cell {
             sulfur: 0
         };
         this.resourceCapacity = radius * 5; // Max resources based on size
-        this.resourceAbsorptionRate = 0.1 + (isPlayer ? 0.1 : 0); // Player absorbs slightly faster
+        this.resourceAbsorptionRate = 0.1 + (isSelected ? 0.1 : 0); // Selected cells absorb slightly faster
     }
 
     createParticles(count) {
@@ -51,14 +51,14 @@ export class Cell {
 
         // Draw outline
         ctx.lineWidth = 2;
-        ctx.strokeStyle = this.isPlayer ? '#ffffff' : 'rgba(255, 255, 255, 0.5)';
+        ctx.strokeStyle = this.isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.5)';
         ctx.stroke();
 
-        if (this.isPlayer) {
+        if (this.isSelected) {
             // Draw inner membrane
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius * 0.8, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillStyle = 'rgba(220, 220, 230, 0.15)';
             ctx.fill();
 
             // Update and draw particles
@@ -68,7 +68,7 @@ export class Cell {
             // Draw cell nucleus
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius * 0.4, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillStyle = 'rgba(40, 45, 60, 0.25)';
             ctx.fill();
 
             // Draw resource indicators for player cell
@@ -79,8 +79,8 @@ export class Cell {
                 this.x, this.y, 0,
                 this.x, this.y, this.radius
             );
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
-            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            gradient.addColorStop(0, 'rgba(200, 200, 210, 0.5)');
+            gradient.addColorStop(1, 'rgba(200, 200, 210, 0)');
 
             ctx.beginPath();
             ctx.arc(this.x, this.y, this.radius * 0.5, 0, Math.PI * 2);
@@ -95,10 +95,10 @@ export class Cell {
         if (totalResources <= 0) return;
 
         const resourceColors = {
-            carbon: 'rgba(80, 200, 120, 0.8)',
-            nitrogen: 'rgba(100, 150, 255, 0.8)',
-            phosphorus: 'rgba(255, 190, 100, 0.8)',
-            sulfur: 'rgba(255, 255, 100, 0.8)'
+            carbon: 'rgba(80, 120, 100, 0.7)',
+            nitrogen: 'rgba(80, 100, 130, 0.7)',
+            phosphorus: 'rgba(130, 110, 90, 0.7)',
+            sulfur: 'rgba(120, 120, 80, 0.7)'
         };
 
         // Draw resource level as small orbs around the cell
@@ -130,7 +130,7 @@ export class Cell {
     }
 
     drawParticles(ctx) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.fillStyle = 'rgba(220, 220, 230, 0.5)';
         for (const particle of this.particles) {
             ctx.beginPath();
             ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
@@ -170,8 +170,8 @@ export class Cell {
             this.direction = -this.direction;
         }
 
-        // Update particles if player cell
-        if (this.isPlayer) {
+        // Update particles if selected cell
+        if (this.isSelected) {
             this.updateParticles();
         }
     }
@@ -190,8 +190,8 @@ export class Cell {
         if (this.resources.hasOwnProperty(resourceType)) {
             this.resources[resourceType] += absorbAmount;
 
-            // If this is the player cell, increase size slightly based on resources
-            if (this.isPlayer && absorbAmount > 0) {
+            // If this is a selected cell, increase size slightly based on resources
+            if (this.isSelected && absorbAmount > 0) {
                 // Gradual growth based on resources
                 this.radius += absorbAmount * 0.01;
             }

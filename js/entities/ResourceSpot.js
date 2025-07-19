@@ -26,18 +26,19 @@ export class ResourceSpot {
     }
 
     getResourceColor() {
-        // Different colors for different resource types (more fog-like with lower opacity)
+        // Кольори більш нейтральні, як у мікроскопічному зображенні
+        // з різними відтінками для різних ресурсів
         switch (this.resourceType) {
             case 'carbon':
-                return 'rgba(80, 200, 120, 0.3)'; // Green fog for carbon
+                return 'rgba(120, 180, 170, 0.15)'; // Блакитно-зелений для вуглецю
             case 'nitrogen':
-                return 'rgba(100, 150, 255, 0.3)'; // Blue fog for nitrogen
+                return 'rgba(140, 170, 190, 0.15)'; // Блакитний для азоту
             case 'phosphorus':
-                return 'rgba(255, 190, 100, 0.3)'; // Orange fog for phosphorus
+                return 'rgba(170, 180, 160, 0.15)'; // Світло-сірий з зеленуватим для фосфору
             case 'sulfur':
-                return 'rgba(255, 255, 100, 0.3)'; // Yellow fog for sulfur
+                return 'rgba(180, 180, 150, 0.15)'; // Світло-жовтий для сірки
             default:
-                return 'rgba(200, 200, 200, 0.3)'; // Grey fog for unknown
+                return 'rgba(160, 160, 160, 0.15)'; // Сірий для невідомого
         }
     }
 
@@ -61,37 +62,91 @@ export class ResourceSpot {
         // Save context for clipping
         ctx.save();
 
-        // Create a simple circle for the fog effect
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        // Малюємо неоднорідну структуру, як у препараті під мікроскопом
+        this.drawMicroscopicTexture(ctx);
 
-        // Create a gradient for a fog-like effect
-        const gradient = ctx.createRadialGradient(
-            this.x, this.y, 0,
-            this.x, this.y, this.radius
-        );
-
-        const baseColor = this.color.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.7);
-        gradient.addColorStop(0, baseColor);
-        gradient.addColorStop(0.6, baseColor.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.4));
-        gradient.addColorStop(1, baseColor.replace(/[^,]+(?=\))/, 0));
-
-        ctx.fillStyle = gradient;
-        ctx.fill();
-
-        // Simple center circle showing resource amount
+        // Центральна частина показує кількість ресурсу
         const resourcePercentage = this.resourceAmount / (this.maxRadius * 10);
-        const innerRadius = this.radius * 0.3 * resourcePercentage;
 
-        if (innerRadius > 1) {
+        if (resourcePercentage > 0.05) {
+            // Градієнт для центральної частини, імітуємо зміну щільності речовини
+            const innerGradient = ctx.createRadialGradient(
+                this.x, this.y, 0,
+                this.x, this.y, this.radius * 0.4 * resourcePercentage
+            );
+
+            // Більш інтенсивний колір в центрі
+            const centerColor = this.color.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.3);
+            innerGradient.addColorStop(0, centerColor);
+            innerGradient.addColorStop(0.7, centerColor.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.15));
+            innerGradient.addColorStop(1, centerColor.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.05));
+
+            // Малюємо центральну частину
             ctx.beginPath();
-            ctx.arc(this.x, this.y, innerRadius, 0, Math.PI * 2);
-            ctx.fillStyle = this.color.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.8);
+            ctx.arc(this.x, this.y, this.radius * 0.4 * resourcePercentage, 0, Math.PI * 2);
+            ctx.fillStyle = innerGradient;
             ctx.fill();
         }
 
         // Restore context
         ctx.restore();
+    }
+
+    // Метод для створення ефекту мікроскопічної текстури
+    drawMicroscopicTexture(ctx) {
+        // Ініціалізуємо точки текстури при першому виклику
+        if (!this.texturePoints) {
+            this.texturePoints = [];
+            const pointsCount = Math.floor(this.radius * 0.8);
+
+            for (let i = 0; i < pointsCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * this.radius;
+
+                // Розмір точки зменшується до країв
+                const distanceRatio = distance / this.radius;
+                const size = 0.5 + Math.random() * (1 - distanceRatio) * 1.5;
+
+                this.texturePoints.push({
+                    x: Math.cos(angle) * distance,
+                    y: Math.sin(angle) * distance,
+                    size: size,
+                    opacity: (1 - distanceRatio * 0.8) * 0.2
+                });
+            }
+        }
+
+        // Малюємо фонову область
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        const baseColor = this.color.replace(/[^,]+(?=\))/, this.fadeOpacity * 0.07);
+        ctx.fillStyle = baseColor;
+        ctx.fill();
+
+        // Малюємо кожну точку текстури
+        for (const point of this.texturePoints) {
+            ctx.beginPath();
+            ctx.arc(
+                this.x + point.x,
+                this.y + point.y,
+                point.size,
+                0,
+                Math.PI * 2
+            );
+
+            // Отримуємо базовий колір з тонкою зміною відтінку для різноманіття
+            const colorParts = this.color.match(/\d+/g);
+            if (colorParts && colorParts.length >= 3) {
+                const r = parseInt(colorParts[0]) + Math.random() * 20 - 10;
+                const g = parseInt(colorParts[1]) + Math.random() * 20 - 10;
+                const b = parseInt(colorParts[2]) + Math.random() * 20 - 10;
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${point.opacity * this.fadeOpacity})`;
+            } else {
+                ctx.fillStyle = this.color.replace(/[^,]+(?=\))/, point.opacity * this.fadeOpacity);
+            }
+
+            ctx.fill();
+        }
     }
 
     consumeResource(amount) {

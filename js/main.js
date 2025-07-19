@@ -16,6 +16,9 @@ class Game {
         // Initialize scenes
         this.worldScene = new WorldScene(this.worldCanvas);
         this.editorScene = new EditorScene(this.editorCanvas);
+
+        // Add instructions for the overseer controls
+        this.addOverseerInstructions();
         this.currentScene = this.worldScene;
 
         this.setupEventListeners();
@@ -104,6 +107,50 @@ class Game {
         if (this.currentScene && this.currentScene.resize) {
             this.currentScene.resize();
         }
+    }
+
+    addOverseerInstructions() {
+        // Create instructions element
+        const instructions = document.createElement('div');
+        instructions.className = 'instructions';
+        instructions.innerHTML = `
+            <h3>Керування наглядачем:</h3>
+            <ul>
+                <li><strong>Shift + Клік</strong> - Вибрати клітину</li>
+                <li><strong>Ctrl/Cmd + Клік</strong> - Скасувати вибір клітини</li>
+                <li><strong>Пробіл</strong> - Прискорити вибрані клітини</li>
+                <li><strong>Esc</strong> - Скасувати вибір усіх клітин</li>
+                <li><strong>Перетягування</strong> - Пересування камери</li>
+            </ul>
+        `;
+
+        // Style the instructions
+        instructions.style.position = 'absolute';
+        instructions.style.bottom = '10px';
+        instructions.style.right = '10px';
+        instructions.style.background = 'rgba(0, 20, 40, 0.7)';
+        instructions.style.padding = '10px';
+        instructions.style.borderRadius = '5px';
+        instructions.style.color = 'white';
+        instructions.style.fontFamily = 'Arial, sans-serif';
+        instructions.style.fontSize = '14px';
+        instructions.style.zIndex = '1000';
+
+        // Add styles for the list
+        const style = document.createElement('style');
+        style.textContent = `
+            .instructions ul {
+                padding-left: 20px;
+                margin: 5px 0;
+            }
+            .instructions h3 {
+                margin: 0 0 10px 0;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add to world scene
+        this.worldSceneElement.appendChild(instructions);
     }
 
     startGameLoop() {
