@@ -167,6 +167,16 @@
         .nucleotide.selected {
             outline: 2px solid white;
         }
+
+        .highlight-complementary {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
     </style>
 </head>
 <body>
@@ -176,6 +186,7 @@
         <div id="rnaSequence">
             <div class="tools">
                 <button class="tool-button" id="cutterTool">Cutter</button>
+                <button class="tool-button" id="resetConnectionsBtn">Reset Connections</button>
             </div>
             <canvas id="sequenceCanvas"></canvas>
         </div>
@@ -209,6 +220,7 @@
     sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
     const leftPanel = document.getElementById('leftPanel');
     let selectedNucleotide = null;
+    let selectedCircleIndex = null; // Track selected nucleotide in circle view
     let draggedNucleotide = null;
     let nucleotideCounts = {
         'A': 10,
@@ -224,6 +236,17 @@
         'C': '#FFDC00'  // Yellow
     };
 
+    // Map for complementary nucleotide base-pairing
+    const complementaryNucleotides = {
+        'A': 'U',
+        'U': 'A',
+        'G': 'C',
+        'C': 'G'
+    };
+
+    // Track nucleotide connections (one-to-one pairing)
+    let nucleotideConnections = {};
+
     function calculateCircleCoordinates(index, total) {
         const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
         const x = circleRadius * Math.cos(angle) + rnaCanvas.width / 2;
@@ -238,6 +261,14 @@
         rnaCtx.save();
         rnaCtx.translate(cameraX, cameraY);
         rnaCtx.scale(scale, scale);
+
+        // Determine the complementary nucleotide if one is selected
+        let selectedNucleotideType = null;
+        let complementaryType = null;
+        if (selectedCircleIndex !== null) {
+            selectedNucleotideType = sequence[selectedCircleIndex];
+            complementaryType = complementaryNucleotides[selectedNucleotideType];
+        }
 
 
         // Draw connecting lines and nucleotides
@@ -255,11 +286,54 @@
                 rnaCtx.stroke();
             }
 
+            // Draw base pairing connections if they exist
+            if (nucleotideConnections[index] !== undefined) {
+                const connectedIndex = nucleotideConnections[index];
+                const connectedPos = calculateCircleCoordinates(connectedIndex, sequence.length);
+                rnaCtx.beginPath();
+                rnaCtx.moveTo(x, y);
+                rnaCtx.lineTo(connectedPos.x, connectedPos.y);
+                rnaCtx.strokeStyle = '#00FFFF';
+                rnaCtx.lineWidth = 1.5;
+                rnaCtx.setLineDash([5, 3]);
+                rnaCtx.stroke();
+                rnaCtx.setLineDash([]);
+            }
+
             // Draw nucleotide
             rnaCtx.beginPath();
             rnaCtx.arc(x, y, nucleotideRadius, 0, Math.PI * 2);
             rnaCtx.fillStyle = nucleotideColors[nucleotide];
             rnaCtx.fill();
+
+            // Highlight selected nucleotide
+            if (selectedCircleIndex === index) {
+                rnaCtx.beginPath();
+                rnaCtx.arc(x, y, nucleotideRadius + 5, 0, Math.PI * 2);
+                rnaCtx.strokeStyle = 'white';
+                rnaCtx.lineWidth = 2;
+                rnaCtx.stroke();
+            }
+
+            // Highlight connected nucleotides
+            if (nucleotideConnections[index] !== undefined) {
+                rnaCtx.beginPath();
+                rnaCtx.arc(x, y, nucleotideRadius + 3, 0, Math.PI * 2);
+                rnaCtx.strokeStyle = '#00FFFF';
+                rnaCtx.lineWidth = 2;
+                rnaCtx.stroke();
+            }
+
+            // Highlight complementary nucleotides to the selected one
+            if (selectedCircleIndex !== null && nucleotide === complementaryType) {
+                rnaCtx.beginPath();
+                rnaCtx.arc(x, y, nucleotideRadius + 3, 0, Math.PI * 2);
+                rnaCtx.strokeStyle = 'cyan';
+                rnaCtx.lineWidth = 1;
+                rnaCtx.setLineDash([3, 2]);
+                rnaCtx.stroke();
+                rnaCtx.setLineDash([]);
+            }
 
             rnaCtx.fillStyle = 'black';
             rnaCtx.font = '12px monospace';
@@ -451,12 +525,18 @@
                 if (cutterMode) {
                     nucleotideCounts[nucleotide]++;
                     sequence = sequence.slice(0, index) + sequence.slice(index + 1);
+
+                    // Clear all connections when cutting a nucleotide
+                    nucleotideConnections = {};
+
                     renderSequence();
                     renderLeftPanel();
                     renderRNACircle();
                 } else {
                     selectedNucleotide = index;
+                    selectedCircleIndex = null; // Clear circle selection when selecting in sequence view
                     renderSequence();
+                    renderRNACircle();
                 }
             }
         });
@@ -481,6 +561,8 @@
             nucleotideCounts[nucleotide]--;
             sequenceCanvas.height = document.getElementById('rnaSequence').offsetHeight - 25;
             sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
+            selectedCircleIndex = null; // Reset selection when sequence changes
+            nucleotideConnections = {}; // Reset connections when sequence changes
             renderSequence();
             renderLeftPanel();
             renderRNACircle();
@@ -498,12 +580,73 @@
         renderRNACircle();
     });
 
+    // Click handler for nucleotide selection in the RNA projection
+    rnaCanvas.addEventListener('click', (e) => {
+        const rect = rnaCanvas.getBoundingClientRect();
+        const mouseX = (e.clientX - rect.left - cameraX) / scale;
+        const mouseY = (e.clientY - rect.top - cameraY) / scale;
+
+        // Check if a nucleotide was clicked
+        let wasNucleotideClicked = false;
+        [...sequence].forEach((nucleotide, index) => {
+            const {x, y} = calculateCircleCoordinates(index, sequence.length);
+            const distance = Math.sqrt(Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2));
+
+            if (distance <= nucleotideRadius) {
+                if (selectedCircleIndex === index) {
+                    // Deselect if already selected
+                    selectedCircleIndex = null;
+                } else if (selectedCircleIndex !== null) {
+                    // If we already have a selected nucleotide, try to create a connection
+                    const selectedType = sequence[selectedCircleIndex];
+                    const clickedType = sequence[index];
+
+                    // Check if they are complementary
+                    if (complementaryNucleotides[selectedType] === clickedType) {
+                        // Remove previous connections involving either nucleotide
+                        for (const [key, value] of Object.entries(nucleotideConnections)) {
+                            if (parseInt(key) === selectedCircleIndex || value === selectedCircleIndex) {
+                                delete nucleotideConnections[key];
+                            }
+                            if (parseInt(key) === index || value === index) {
+                                delete nucleotideConnections[key];
+                            }
+                        }
+
+                        // Create new connection
+                        nucleotideConnections[selectedCircleIndex] = index;
+                        nucleotideConnections[index] = selectedCircleIndex;
+
+                        // Clear selection after connecting
+                        selectedCircleIndex = null;
+                    } else {
+                        // If not complementary, just select the new nucleotide
+                        selectedCircleIndex = index;
+                    }
+                } else {
+                    // Select new nucleotide
+                    selectedCircleIndex = index;
+                }
+                wasNucleotideClicked = true;
+                renderRNACircle();
+            }
+        });
+
+        // Only start dragging if no nucleotide was clicked
+        if (!wasNucleotideClicked) {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            rnaCanvas.style.cursor = 'grabbing';
+        }
+    });
+
     // Mouse event handlers for camera movement
     rnaCanvas.addEventListener('mousedown', (e) => {
-        isDragging = true;
+        // Don't start dragging immediately - the click handler will decide
+        // if we're clicking a nucleotide or starting to drag
         lastMouseX = e.clientX;
         lastMouseY = e.clientY;
-        rnaCanvas.style.cursor = 'grabbing';
     });
 
     rnaCanvas.addEventListener('mousemove', (e) => {
@@ -559,6 +702,11 @@
         sequenceCanvas.classList.toggle('cutter-mode', cutterMode);
     });
 
+    document.getElementById('resetConnectionsBtn').addEventListener('click', () => {
+        nucleotideConnections = {};
+        renderRNACircle();
+    });
+
 
     leftPanel.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -571,6 +719,7 @@
             const nucleotide = sequence[index];
             sequence = sequence.slice(0, index) + sequence.slice(Number(index) + 1);
             nucleotideCounts[nucleotide]++;
+            selectedCircleIndex = null; // Reset selection when sequence changes
             renderSequence();
             renderLeftPanel();
             renderRNACircle();
