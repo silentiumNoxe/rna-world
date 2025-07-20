@@ -1,50 +1,308 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RNA Evolution Game</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <title>RNA Editor</title>
+    <style>
+        * {
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            border: 2px solid #333;
+            border-radius: 4px;
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 10px;
+            height: 100vh;
+            box-sizing: border-box;
+            padding: 10px;
+        }
+
+        #leftPanel {
+            background: #222;
+            border-radius: 4px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nucleotide-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            font-family: monospace;
+        }
+
+        #rightPanel {
+            display: grid;
+            grid-template-rows: 200px 1fr;
+            gap: 10px;
+        }
+
+        #rnaSequence {
+            background: #222;
+            border-radius: 4px;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 3px 5px;
+            scrollbar-color: #333 transparent;
+        }
+
+        #rnaSequence .sequence-content {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .nucleotide {
+            width: 30px;
+            min-width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: black;
+            font-family: monospace;
+            font-size: 14px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .nucleotide-index {
+            position: absolute;
+            top: -20px;
+            color: white;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .sequence-content {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .drop-zone {
+            background: transparent;
+            transition: background 0.3s;
+        }
+
+        .drop-zone:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .rna-end-label {
+            position: absolute;
+            color: white;
+            font-family: monospace;
+            font-size: 14px;
+            top: 40px;
+        }
+
+        #canvasView {
+            background: #222;
+            border-radius: 4px;
+        }
+
+        .tools {
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .tool-button {
+            padding: 5px 10px;
+            background: #444;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .tool-button:hover {
+            background: #555;
+        }
+
+        .nucleotide.selected {
+            outline: 2px solid white;
+        }
+    </style>
 </head>
 <body>
-    <div class="game-container">
-        <div class="scenes-container">
-            <div id="world-scene" class="scene active">
-                <div class="controls">
-                    <button id="world-play">Грати</button>
-                    <button id="world-pause">Пауза</button>
-                    <button id="world-step">Крок</button>
-                    <div class="speed-control">
-                        <label for="simulation-speed">Швидкість:</label>
-                        <input type="range" id="simulation-speed" min="1" max="10" value="5">
-                    </div>
-                    <div class="overseer-controls">
-                        <span>Режим: Наглядач</span>
-                    </div>
-                </div>
-                <canvas id="world-canvas"></canvas>
-            </div>
-            <div id="editor-scene" class="scene">
-                <canvas id="editor-canvas"></canvas>
-                <div class="controls">
-                    <div class="nucleotide-controls">
-                        <button class="nucleotide-btn" data-nucleotide="A">A</button>
-                        <button class="nucleotide-btn" data-nucleotide="U">U</button>
-                        <button class="nucleotide-btn" data-nucleotide="G">G</button>
-                        <button class="nucleotide-btn" data-nucleotide="C">C</button>
-                    </div>
-                    <input type="text" id="rna-sequence" placeholder="Послідовність РНК">
-                    <button id="random-sequence">Випадкова</button>
-                    <button id="simulate-sequence">Симулювати</button>
-                </div>
-            </div>
+<div id="gameContainer">
+    <div id="leftPanel"></div>
+    <div id="rightPanel">
+        <div id="rnaSequence">
+            <canvas id="sequenceCanvas"></canvas>
         </div>
-        <div class="scene-switcher">
-            <button id="switch-to-world" class="active">Світ</button>
-            <button id="switch-to-editor">Редактор</button>
+        <div id="canvasView">
+            <canvas id="gameCanvas"></canvas>
         </div>
     </div>
+</div>
+<script>
+    let sequence = 'AUGCCGUAGCUAGCUAGCUAGCUAGCUAGCUAGCUAGCU'.repeat(5);
+    const sequenceCanvas = document.getElementById('sequenceCanvas');
+    const ctx = sequenceCanvas.getContext('2d');
+    const spacing = 39;
+    let scrollX = 0;
+    sequenceCanvas.height = document.getElementById('rnaSequence').offsetHeight - 25;
+    sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
+    const leftPanel = document.getElementById('leftPanel');
+    let selectedNucleotide = null;
+    let draggedNucleotide = null;
+    let nucleotideCounts = {
+        'A': 10,
+        'U': 10,
+        'G': 10,
+        'C': 10
+    };
 
-    <script src="js/main.js" type="module"></script>
+    const nucleotideColors = {
+        'A': '#FF4136', // Red
+        'U': '#2ECC40', // Green
+        'G': '#0074D9', // Blue
+        'C': '#FFDC00'  // Yellow
+    };
+
+    function renderLeftPanel() {
+        leftPanel.innerHTML = '';
+        Object.entries(nucleotideCounts).forEach(([nucleotide, count]) => {
+            const container = document.createElement('div');
+            container.className = 'nucleotide-container';
+
+            const circle = document.createElement('div');
+            circle.className = 'nucleotide';
+            circle.textContent = nucleotide;
+            circle.style.backgroundColor = nucleotideColors[nucleotide];
+            circle.draggable = true;
+            circle.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', nucleotide);
+                selectedNucleotide = nucleotide;
+            });
+
+            container.appendChild(circle);
+            container.appendChild(document.createTextNode(`× ${count}`));
+            leftPanel.appendChild(container);
+        });
+    }
+
+    function renderSequence() {
+        ctx.clearRect(0, 0, sequenceCanvas.width, sequenceCanvas.height);
+
+        const startX = 40 - scrollX;
+        const startY = sequenceCanvas.height / 2;
+        const nucleotideSize = 30;
+        const spacing = 39;
+
+        // Draw sequence
+        [...sequence].forEach((nucleotide, index) => {
+            const x = startX + index * spacing;
+
+            // Draw nucleotide circle
+            ctx.beginPath();
+            ctx.arc(x, startY, nucleotideSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = nucleotideColors[nucleotide];
+            ctx.fill();
+            if (selectedNucleotide === index) {
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Draw nucleotide text
+            ctx.fillStyle = 'black';
+            ctx.font = '14px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(nucleotide, x, startY);
+
+            // Draw index numbers
+            if ((index + 1) % 10 === 0) {
+                ctx.fillStyle = 'white';
+                ctx.font = '12px monospace';
+                ctx.fillText(index + 1, x, startY - 40);
+            }
+        });
+
+        // Draw 3' and 5' labels
+        ctx.fillStyle = 'white';
+        ctx.font = '14px monospace';
+        ctx.fillText("3'", startX, startY + 40);
+        ctx.fillText("5'", startX + (sequence.length - 1) * spacing, startY + 40);
+    }
+
+    sequenceCanvas.addEventListener('click', (e) => {
+        const rect = sequenceCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const startX = 40;
+        const startY = sequenceCanvas.height / 2;
+        const spacing = 39;
+
+        [...sequence].forEach((_, index) => {
+            const nucleotideX = startX + index * spacing;
+            const distance = Math.sqrt(Math.pow(x - nucleotideX, 2) + Math.pow(y - startY, 2));
+            if (distance <= 15) {
+                selectedNucleotide = index;
+                renderSequence();
+            }
+        });
+    });
+
+    sequenceCanvas.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    sequenceCanvas.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const rect = sequenceCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const startX = 40;
+        const spacing = 39;
+
+        const insertIndex = Math.round((x - startX) / spacing);
+        const nucleotide = e.dataTransfer.getData('text/plain');
+
+        if (nucleotide && nucleotideCounts[nucleotide] > 0 && insertIndex >= 0 && insertIndex <= sequence.length) {
+            sequence = sequence.slice(0, insertIndex) + nucleotide + sequence.slice(insertIndex);
+            nucleotideCounts[nucleotide]--;
+            renderSequence();
+            renderLeftPanel();
+        }
+    });
+
+    renderSequence();
+    renderLeftPanel();
+
+
+    leftPanel.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+
+    leftPanel.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const index = e.dataTransfer.getData('sequenceIndex');
+        if (index) {
+            const nucleotide = sequence[index];
+            sequence = sequence.slice(0, index) + sequence.slice(Number(index) + 1);
+            nucleotideCounts[nucleotide]++;
+            renderSequence();
+            renderLeftPanel();
+        }
+    });
+</script>
 </body>
 </html>
