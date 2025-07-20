@@ -84,7 +84,7 @@
         #rnaSequence .sequence-content {
             display: flex;
             align-items: center;
-            gap: 9px;
+            gap: 40px;
         }
 
         #sequenceCanvas.cutter-mode {
@@ -185,12 +185,13 @@
     </div>
 </div>
 <script>
-    let sequence = 'AUGCCGUAGCUAGC'.repeat(2);
+    let sequence = randomizeRNA(25);
     const sequenceCanvas = document.getElementById('sequenceCanvas');
     const ctx = sequenceCanvas.getContext('2d');
-    const spacing = 39;
+    const spacing = 40;
     let cutterMode = false;
     let pairs = [];
+    let positions = [];
 
     // RNA circle visualization constants
     const rnaCanvas = document.getElementById('rnaProjection');
@@ -230,20 +231,167 @@
         'C': '#FFDC00'  // Yellow
     };
 
-    function calculateCircleCoordinates(index, total) {
-        const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
-        const x = circleRadius * Math.cos(angle) + rnaCanvas.width / 2;
-        const y = circleRadius * Math.sin(angle) + rnaCanvas.height / 2;
-        return {x, y};
+    function updateCanvasSize() {
+        rnaCanvas.width = rnaCanvas.parentElement.offsetWidth;
+        rnaCanvas.height = rnaCanvas.parentElement.offsetHeight;
+        // Reset camera position when resizing
+        if (!cameraInitialized) {
+            cameraX = rnaCanvas.width / 2;
+            cameraY = rnaCanvas.height / 2;
+            cameraInitialized = true;
+        }
     }
 
-    function renderRNACircle() {
+    // Find paired regions for RNA structure analysis
+    function findPairedRegions() {
+        // Sort pairs by indices for consistent processing
+        const sortedPairs = [...pairs].sort((a, b) => a[0] - b[0]);
+
+        // Group consecutive paired regions
+        const pairedRegions = [];
+        let currentRegion = null;
+
+        for (const [i, j] of sortedPairs) {
+            if (!currentRegion || 
+                i !== currentRegion.pairs[currentRegion.pairs.length-1][0] + 1 || 
+                j !== currentRegion.pairs[currentRegion.pairs.length-1][1] - 1) {
+                // Start a new region
+                currentRegion = {
+                    start: i,
+                    end: j,
+                    pairs: [[i, j]]
+                };
+                pairedRegions.push(currentRegion);
+            } else {
+                // Extend current region
+                currentRegion.pairs.push([i, j]);
+                currentRegion.end = j;
+            }
+        }
+
+        return pairedRegions;
+    }
+
+    // Recursive function to layout RNA segments
+    function layoutSegment(positions, start, end, angle, x, y, level = 0) {
+        const baseSpacing = 20;
+        const loopSpacing = 25;
+        const branchAngle = Math.PI / 3; // 60 degrees for branches
+
+        let currentX = x;
+        let currentY = y;
+        let currentAngle = angle;
+
+        for (let i = start; i <= end; i++) {
+            // Check if this nucleotide starts a paired region
+            const pairIndex = pairs.find(pair => pair[0] === i);
+
+            if (pairIndex) {
+                const [startIdx, endIdx] = pairIndex;
+
+                // Layout stem (paired segment)
+                // First nucleotide of the pair
+                positions[startIdx] = {
+                    x: currentX,
+                    y: currentY,
+                    label: sequence[startIdx],
+                    paired: true,
+                    pairWith: endIdx
+                };
+
+                currentX += baseSpacing * Math.cos(currentAngle);
+                currentY += baseSpacing * Math.sin(currentAngle);
+
+                // Create a branch for the loop
+                const loopStart = startIdx + 1;
+                const loopEnd = endIdx - 1;
+
+                if (loopStart <= loopEnd) {
+                    // Branch angle for the loop
+                    const branchDir = level % 2 === 0 ? 1 : -1;
+                    const loopAngle = currentAngle + branchDir * branchAngle;
+
+                    // Start position for the loop
+                    const loopX = currentX + loopSpacing * Math.cos(loopAngle);
+                    const loopY = currentY + loopSpacing * Math.sin(loopAngle);
+
+                    // Recursively layout the loop
+                    layoutSegment(positions, loopStart, loopEnd, loopAngle, loopX, loopY, level + 1);
+                }
+
+                // Second nucleotide of the pair
+                positions[endIdx] = {
+                    x: currentX,
+                    y: currentY,
+                    label: sequence[endIdx],
+                    paired: true,
+                    pairWith: startIdx
+                };
+
+                // Skip to after the paired region
+                i = endIdx;
+            } else {
+                // Unpaired nucleotide
+                positions[i] = {
+                    x: currentX,
+                    y: currentY,
+                    label: sequence[i],
+                    paired: false
+                };
+            }
+
+            // Move to next position
+            if (i < end) {
+                currentX += baseSpacing * Math.cos(currentAngle);
+                currentY += baseSpacing * Math.sin(currentAngle);
+            }
+        }
+
+        return positions;
+    }
+
+    function renderRNAStructure() {
         rnaCtx.clearRect(0, 0, rnaCanvas.width, rnaCanvas.height);
 
         // Apply camera translation and scale
         rnaCtx.save();
         rnaCtx.translate(cameraX, cameraY);
         rnaCtx.scale(scale, scale);
+
+        // Calculate nucleotide positions using layout algorithm
+        positions = [];
+        const centerX = rnaCanvas.width / (2 * scale);
+        const centerY = rnaCanvas.height / (2 * scale);
+
+        // Layout the entire RNA sequence
+        layoutSegment(positions, 0, sequence.length - 1, 0, centerX, centerY);
+
+        // Draw backbone connections
+        rnaCtx.beginPath();
+        rnaCtx.strokeStyle = '#666';
+        rnaCtx.lineWidth = 2;
+
+        for (let i = 0; i < sequence.length - 1; i++) {
+            if (positions[i] && positions[i+1]) {
+                rnaCtx.moveTo(positions[i].x, positions[i].y);
+                rnaCtx.lineTo(positions[i+1].x, positions[i+1].y);
+            }
+        }
+        rnaCtx.stroke();
+
+        // Draw base pairing lines
+        rnaCtx.beginPath();
+        rnaCtx.strokeStyle = '#ff8800';
+        rnaCtx.lineWidth = 1;
+
+        for (let i = 0; i < sequence.length; i++) {
+            if (positions[i] && positions[i].paired && positions[i].pairWith > i) {
+                const pair = positions[positions[i].pairWith];
+                rnaCtx.moveTo(positions[i].x, positions[i].y);
+                rnaCtx.lineTo(pair.x, pair.y);
+            }
+        }
+        rnaCtx.stroke();
 
         // Highlight paired nucleotides if one is selected
         const pairableNucleotides = [];
@@ -257,83 +405,65 @@
             });
         }
 
+        // Draw nucleotides
+        for (let i = 0; i < sequence.length; i++) {
+            if (positions[i]) {
+                const { x, y, label } = positions[i];
 
-        // Draw connecting lines and nucleotides
-        [...sequence].forEach((nucleotide, index) => {
-            const {x, y} = calculateCircleCoordinates(index, sequence.length);
-
-            // Draw connecting line to next nucleotide
-            if (index < sequence.length - 1) {
-                const nextPos = calculateCircleCoordinates(index + 1, sequence.length);
+                // Draw nucleotide circle
                 rnaCtx.beginPath();
-                rnaCtx.moveTo(x, y);
-                rnaCtx.lineTo(nextPos.x, nextPos.y);
-                rnaCtx.strokeStyle = '#666';
-                rnaCtx.lineWidth = 2;
-                rnaCtx.stroke();
-            }
+                rnaCtx.arc(x, y, nucleotideRadius, 0, Math.PI * 2);
+                rnaCtx.fillStyle = nucleotideColors[label];
+                rnaCtx.fill();
 
-            // Draw pairing lines
-            pairs.forEach(([first, second]) => {
-                if (index === first) {
-                    const pairPos = calculateCircleCoordinates(second, sequence.length);
-                    rnaCtx.beginPath();
-                    rnaCtx.moveTo(x, y);
-                    rnaCtx.lineTo(pairPos.x, pairPos.y);
-                    rnaCtx.strokeStyle = 'white';
+                // Highlight selected or pairable nucleotides
+                if (selectedNucleotide === i) {
+                    rnaCtx.strokeStyle = '#ff00ff';
                     rnaCtx.lineWidth = 2;
                     rnaCtx.stroke();
+                } else if (pairableNucleotides.includes(i)) {
+                    rnaCtx.strokeStyle = '#00ffff';
+                    rnaCtx.lineWidth = 2;
+                    rnaCtx.stroke();
+                } else if (positions[i].paired) {
+                    rnaCtx.strokeStyle = 'white';
+                    rnaCtx.lineWidth = 1;
+                    rnaCtx.stroke();
                 }
-            });
 
-            // Draw nucleotide
-            rnaCtx.beginPath();
-            rnaCtx.arc(x, y, nucleotideRadius, 0, Math.PI * 2);
-            rnaCtx.fillStyle = nucleotideColors[nucleotide];
-            rnaCtx.fill();
-            if (selectedNucleotide === index) {
-                rnaCtx.strokeStyle = '#ff00ff';
-                rnaCtx.lineWidth = 2;
-                rnaCtx.stroke();
-            } else if (pairableNucleotides.includes(index)) {
-                rnaCtx.strokeStyle = '#00ffff';
-                rnaCtx.lineWidth = 2;
-                rnaCtx.stroke();
+                // Draw nucleotide label
+                rnaCtx.fillStyle = 'black';
+                rnaCtx.font = '12px monospace';
+                rnaCtx.textAlign = 'center';
+                rnaCtx.textBaseline = 'middle';
+                rnaCtx.fillText(label, x, y);
+
+                // Draw index numbers for every 10th nucleotide
+                if ((i + 1) % 10 === 0) {
+                    rnaCtx.fillStyle = 'white';
+                    rnaCtx.font = '10px monospace';
+                    const indexX = x + 15 * Math.cos(Math.PI/4);
+                    const indexY = y + 15 * Math.sin(Math.PI/4);
+                    rnaCtx.fillText(i + 1, indexX, indexY);
+                }
             }
+        }
 
-            rnaCtx.fillStyle = 'black';
-            rnaCtx.font = '12px monospace';
+        // Add 5' and 3' labels
+        if (positions[0]) {
+            rnaCtx.fillStyle = 'white';
+            rnaCtx.font = '14px monospace';
             rnaCtx.textAlign = 'center';
-            rnaCtx.textBaseline = 'middle';
-            rnaCtx.fillText(nucleotide, x, y);
+            rnaCtx.fillText("5'", positions[0].x - 20, positions[0].y);
+        }
 
-            // Draw index numbers for every 10th nucleotide
-            if ((index + 1) % 10 === 0) {
-                const labelRadius = circleRadius + 30;
-                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
-                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
-                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
-                rnaCtx.fillStyle = 'white';
-                rnaCtx.fillText(index + 1, labelX, labelY);
-            }
+        if (positions[sequence.length - 1]) {
+            rnaCtx.fillStyle = 'white';
+            rnaCtx.font = '14px monospace';
+            rnaCtx.textAlign = 'center';
+            rnaCtx.fillText("3'", positions[sequence.length - 1].x + 20, positions[sequence.length - 1].y);
+        }
 
-            // Add 3' and 5' labels
-            if (index === 0) {
-                const labelRadius = circleRadius + 50;
-                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
-                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
-                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
-                rnaCtx.fillStyle = 'white';
-                rnaCtx.fillText("5'", labelX, labelY);
-            } else if (index === sequence.length - 1) {
-                const labelRadius = circleRadius + 50;
-                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
-                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
-                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
-                rnaCtx.fillStyle = 'white';
-                rnaCtx.fillText("3'", labelX, labelY);
-            }
-        });
         rnaCtx.restore();
     }
 
@@ -493,7 +623,7 @@
                     sequence = sequence.slice(0, index) + sequence.slice(index + 1);
                     renderSequence();
                     renderLeftPanel();
-                    renderRNACircle();
+                    renderRNAStructure();
                 } else {
                     selectedNucleotide = index;
                     renderSequence();
@@ -511,7 +641,7 @@
         const rect = sequenceCanvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const startX = 40;
-        const spacing = 39;
+        const spacing = 40;
 
         const insertIndex = Math.round((x - startX) / spacing);
         const nucleotide = e.dataTransfer.getData('text/plain');
@@ -523,19 +653,18 @@
             sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
             renderSequence();
             renderLeftPanel();
-            renderRNACircle();
+            renderRNAStructure();
         }
     });
 
     renderSequence();
     renderLeftPanel();
-    renderRNACircle();
+    renderRNAStructure();
 
     // Handle RNA canvas resize
     window.addEventListener('resize', () => {
-        rnaCanvas.width = rnaCanvas.parentElement.offsetWidth;
-        rnaCanvas.height = rnaCanvas.parentElement.offsetHeight;
-        renderRNACircle();
+        updateCanvasSize();
+        renderRNAStructure();
     });
 
     function canPair(nucleotide1Index, nucleotide2Index) {
@@ -545,46 +674,69 @@
         return nucleotidePairings[base1] === base2;
     }
 
+    function removeExistingPairs(nucleotideIndex) {
+        pairs = pairs.filter(([first, second]) => first !== nucleotideIndex && second !== nucleotideIndex);
+    }
+
     // Mouse event handlers for camera movement
     rnaCanvas.addEventListener('mousedown', (e) => {
         const rect = rnaCanvas.getBoundingClientRect();
-        const mouseX = (e.clientX - rect.left - cameraX) / scale;
-        const mouseY = (e.clientY - rect.top - cameraY) / scale;
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Transform to world coordinates
+        const worldX = (mouseX - cameraX) / scale;
+        const worldY = (mouseY - cameraY) / scale;
 
         // Check if clicked on a nucleotide
+        let clickedNucleotide = false;
         for (let i = 0; i < sequence.length; i++) {
-            const {x, y} = calculateCircleCoordinates(i, sequence.length);
-            const distance = Math.sqrt(Math.pow(mouseX - x, 2) + Math.pow(mouseY - y, 2));
+            const pos = positions[i];
+            if (!pos) continue;
+
+            const distance = Math.sqrt(Math.pow(worldX - pos.x, 2) + Math.pow(worldY - pos.y, 2));
 
             if (distance <= nucleotideRadius) {
+                clickedNucleotide = true;
                 if (selectedNucleotide !== null && selectedNucleotide !== i) {
                     if (canPair(selectedNucleotide, i)) {
-                        pairs.push([selectedNucleotide, i]);
+                        removeExistingPairs(selectedNucleotide);
+                        removeExistingPairs(i);
+                        pairs.push([Math.min(selectedNucleotide, i), Math.max(selectedNucleotide, i)]);
                     }
                     selectedNucleotide = null;
                 } else {
                     selectedNucleotide = i;
                 }
-                renderRNACircle();
-                return;
+                renderRNAStructure();
+                break;
             }
         }
 
-        isDragging = true;
-        lastMouseX = e.clientX;
-        lastMouseY = e.clientY;
-        rnaCanvas.style.cursor = 'grabbing';
+        if (!clickedNucleotide) {
+            isDragging = true;
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+            rnaCanvas.style.cursor = 'grabbing';
+        }
     });
 
     rnaCanvas.addEventListener('mousemove', (e) => {
         if (isDragging) {
-            const deltaX = e.clientX - lastMouseX;
-            const deltaY = e.clientY - lastMouseY;
+            const rect = rnaCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const deltaX = mouseX - lastMouseX;
+            const deltaY = mouseY - lastMouseY;
+
             cameraX += deltaX;
             cameraY += deltaY;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            renderRNACircle();
+
+            lastMouseX = mouseX;
+            lastMouseY = mouseY;
+
+            renderRNAStructure();
         }
     });
 
@@ -614,14 +766,14 @@
         cameraY = mouseY - (mouseY - cameraY) * scaleFactor;
 
         scale = newScale;
-        renderRNACircle();
+        renderRNAStructure();
     });
 
     // Initial RNA canvas setup
-    rnaCanvas.width = rnaCanvas.parentElement.offsetWidth;
-    rnaCanvas.height = rnaCanvas.parentElement.offsetHeight;
+    let cameraInitialized = false;
+    updateCanvasSize();
     rnaCanvas.style.cursor = 'grab';
-    renderRNACircle();
+    renderRNAStructure();
 
     document.getElementById('cutterTool').addEventListener('click', () => {
         cutterMode = !cutterMode;
@@ -643,9 +795,18 @@
             nucleotideCounts[nucleotide]++;
             renderSequence();
             renderLeftPanel();
-            renderRNACircle();
+            renderRNAStructure();
         }
     });
+
+    function randomizeRNA(length) {
+        const alphabet = 'ACGU';
+        let sequence = '';
+        for (let i = 0; i < length; i++) {
+            sequence += alphabet[Math.floor(Math.random() * alphabet.length)];
+        }
+        return sequence;
+    }
 </script>
 </body>
 </html>
