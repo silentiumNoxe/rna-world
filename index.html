@@ -17,10 +17,8 @@
         }
 
         #gameContainer {
-            border: 2px solid #333;
-            border-radius: 4px;
             display: grid;
-            grid-template-columns: 200px 1fr;
+            grid-template-columns: 300px 1fr;
             gap: 10px;
             height: 100vh;
             box-sizing: border-box;
@@ -36,12 +34,36 @@
             gap: 10px;
         }
 
+        .rna-name-input {
+            padding: 8px;
+            background: #333;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: white;
+            font-family: monospace;
+            margin-bottom: 10px;
+        }
+
+        .nucleotides-group {
+            background: #333;
+            border-radius: 4px;
+            padding: 10px;
+        }
+
+        .nucleotides-title {
+            color: white;
+            font-family: monospace;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
         .nucleotide-container {
             display: flex;
             align-items: center;
             gap: 10px;
             color: white;
             font-family: monospace;
+            margin-bottom: 5px;
         }
 
         #rightPanel {
@@ -63,6 +85,10 @@
             display: flex;
             align-items: center;
             gap: 9px;
+        }
+
+        #sequenceCanvas.cutter-mode {
+            cursor: crosshair;
         }
 
         .nucleotide {
@@ -120,6 +146,9 @@
             padding: 10px;
             display: flex;
             gap: 10px;
+            background: #333;
+            border-radius: 4px;
+            margin-bottom: 10px;
         }
 
         .tool-button {
@@ -145,6 +174,9 @@
     <div id="leftPanel"></div>
     <div id="rightPanel">
         <div id="rnaSequence">
+            <div class="tools">
+                <button class="tool-button" id="cutterTool">Cutter</button>
+            </div>
             <canvas id="sequenceCanvas"></canvas>
         </div>
         <div id="canvasView">
@@ -157,6 +189,7 @@
     const sequenceCanvas = document.getElementById('sequenceCanvas');
     const ctx = sequenceCanvas.getContext('2d');
     const spacing = 39;
+    let cutterMode = false;
     let scrollX = 0;
     sequenceCanvas.height = document.getElementById('rnaSequence').offsetHeight - 25;
     sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
@@ -177,8 +210,40 @@
         'C': '#FFDC00'  // Yellow
     };
 
+    function calculateStats() {
+        const stats = {
+            length: sequence.length,
+            counts: {
+                'A': 0,
+                'U': 0,
+                'G': 0,
+                'C': 0
+            }
+        };
+
+        for (const nucleotide of sequence) {
+            stats.counts[nucleotide]++;
+        }
+
+        return stats;
+    }
+
     function renderLeftPanel() {
         leftPanel.innerHTML = '';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.placeholder = 'RNA Name';
+        nameInput.className = 'rna-name-input';
+        leftPanel.appendChild(nameInput);
+
+        const nucleotidesGroup = document.createElement('div');
+        nucleotidesGroup.className = 'nucleotides-group';
+
+        const title = document.createElement('div');
+        title.className = 'nucleotides-title';
+        title.textContent = 'Available nucleotides';
+        nucleotidesGroup.appendChild(title);
+
         Object.entries(nucleotideCounts).forEach(([nucleotide, count]) => {
             const container = document.createElement('div');
             container.className = 'nucleotide-container';
@@ -195,8 +260,34 @@
 
             container.appendChild(circle);
             container.appendChild(document.createTextNode(`× ${count}`));
-            leftPanel.appendChild(container);
+            nucleotidesGroup.appendChild(container);
         });
+
+        leftPanel.appendChild(nucleotidesGroup);
+
+        const statsGroup = document.createElement('div');
+        statsGroup.className = 'nucleotides-group';
+
+        const statsTitle = document.createElement('div');
+        statsTitle.className = 'nucleotides-title';
+        statsTitle.textContent = 'Sequence Statistics';
+        statsGroup.appendChild(statsTitle);
+
+        const stats = calculateStats();
+
+        const lengthContainer = document.createElement('div');
+        lengthContainer.className = 'nucleotide-container';
+        lengthContainer.textContent = `Total Length: ${stats.length}`;
+        statsGroup.appendChild(lengthContainer);
+
+        Object.entries(stats.counts).forEach(([nucleotide, count]) => {
+            const container = document.createElement('div');
+            container.className = 'nucleotide-container';
+            container.textContent = `${nucleotide}: ${count}`;
+            statsGroup.appendChild(container);
+        });
+
+        leftPanel.appendChild(statsGroup);
     }
 
     function renderSequence() {
@@ -206,6 +297,20 @@
         const startY = sequenceCanvas.height / 2;
         const nucleotideSize = 30;
         const spacing = 39;
+
+        // Draw connecting lines first
+        ctx.beginPath();
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 2;
+        [...sequence].forEach((_, index) => {
+            const x = startX + index * spacing;
+            if (index === 0) {
+                ctx.moveTo(x, startY);
+            } else {
+                ctx.lineTo(x, startY);
+            }
+        });
+        ctx.stroke();
 
         // Draw sequence
         [...sequence].forEach((nucleotide, index) => {
@@ -252,12 +357,19 @@
         const startY = sequenceCanvas.height / 2;
         const spacing = 39;
 
-        [...sequence].forEach((_, index) => {
+        [...sequence].forEach((nucleotide, index) => {
             const nucleotideX = startX + index * spacing;
             const distance = Math.sqrt(Math.pow(x - nucleotideX, 2) + Math.pow(y - startY, 2));
             if (distance <= 15) {
-                selectedNucleotide = index;
-                renderSequence();
+                if (cutterMode) {
+                    nucleotideCounts[nucleotide]++;
+                    sequence = sequence.slice(0, index) + sequence.slice(index + 1);
+                    renderSequence();
+                    renderLeftPanel();
+                } else {
+                    selectedNucleotide = index;
+                    renderSequence();
+                }
             }
         });
     });
@@ -279,6 +391,8 @@
         if (nucleotide && nucleotideCounts[nucleotide] > 0 && insertIndex >= 0 && insertIndex <= sequence.length) {
             sequence = sequence.slice(0, insertIndex) + nucleotide + sequence.slice(insertIndex);
             nucleotideCounts[nucleotide]--;
+            sequenceCanvas.height = document.getElementById('rnaSequence').offsetHeight - 25;
+            sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
             renderSequence();
             renderLeftPanel();
         }
@@ -286,6 +400,12 @@
 
     renderSequence();
     renderLeftPanel();
+
+    document.getElementById('cutterTool').addEventListener('click', () => {
+        cutterMode = !cutterMode;
+        document.getElementById('cutterTool').classList.toggle('selected');
+        sequenceCanvas.classList.toggle('cutter-mode', cutterMode);
+    });
 
 
     leftPanel.addEventListener('dragover', (e) => {
