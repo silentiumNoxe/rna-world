@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RNA Game</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <div class="left-panel">
+      <div id="editor-panel" class="panel">
+        <h2>Control Panel</h2>
+
+        <div class="panel-section">
+          <h3>Resources</h3>
+          <ul id="resources-list">
+            <li>A: <span class="resource-count">10</span></li>
+            <li>U: <span class="resource-count">8</span></li>
+            <li>G: <span class="resource-count">5</span></li>
+            <li>C: <span class="resource-count">7</span></li>
+          </ul>
+        </div>
+
+        <div class="panel-section">
+          <h3>RNA Properties</h3>
+          <div class="property-list">
+            <div class="property-item">
+              <span class="property-label">Stability:</span>
+              <span id="rna-stability" class="property-value">0 points</span>
+            </div>
+            <div class="property-item">
+              <span class="property-label">Length:</span>
+              <span id="rna-length" class="property-value">15 nt</span>
+            </div>
+            <div class="property-item">
+              <span class="property-label">Active Function:</span>
+              <span id="rna-function" class="property-value">None</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3>Chemical Affinities</h3>
+          <div class="affinity-legend">
+            <div class="affinity-item">
+              <span class="affinity-indicator substance-p">P</span>
+              <span class="affinity-description">Substance P (>50% C+U)</span>
+            </div>
+            <div class="affinity-item">
+              <span class="affinity-indicator substance-r">R</span>
+              <span class="affinity-description">Substance R (>50% G+A)</span>
+            </div>
+            <div class="affinity-item">
+              <span class="affinity-indicator substance-reg">A</span>
+              <span class="affinity-description">Regulatory loop (>50% A)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-section">
+          <h3>Environment</h3>
+          <div class="environment-controls">
+            <label class="checkbox-container">
+              <input type="checkbox" id="substance-s-checkbox">
+              <span class="checkbox-label">Сигнальна речовина S присутня</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div id="sequence-viewer">
+        <div class="sequence-header">
+          <h3>RNA Sequence</h3>
+          <span class="sequence-tip">Double-click nucleotides to change their type</span>
+        </div>
+        <div id="rna-sequence"></div>
+      </div>
+      <div id="canvas-container">
+        <canvas id="rna-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
