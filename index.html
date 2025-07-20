@@ -180,17 +180,31 @@
             <canvas id="sequenceCanvas"></canvas>
         </div>
         <div id="canvasView">
-            <canvas id="gameCanvas"></canvas>
+            <canvas id="rnaProjection"></canvas>
         </div>
     </div>
 </div>
 <script>
-    let sequence = 'AUGCCGUAGCUAGCUAGCUAGCUAGCUAGCUAGCUAGCU'.repeat(5);
+    let sequence = 'AUGCCGUAGCUAGC'.repeat(2);
     const sequenceCanvas = document.getElementById('sequenceCanvas');
     const ctx = sequenceCanvas.getContext('2d');
     const spacing = 39;
     let cutterMode = false;
+
+    // RNA circle visualization constants
+    const rnaCanvas = document.getElementById('rnaProjection');
+    const rnaCtx = rnaCanvas.getContext('2d');
+    const circleRadius = sequence.length * 10;
+    const nucleotideRadius = 15;
     let scrollX = 0;
+    let cameraX = 0;
+    let cameraY = 0;
+    let isDragging = false;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    let scale = 1;
+    const minScale = 0.15;
+    const maxScale = 5;
     sequenceCanvas.height = document.getElementById('rnaSequence').offsetHeight - 25;
     sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
     const leftPanel = document.getElementById('leftPanel');
@@ -209,6 +223,79 @@
         'G': '#0074D9', // Blue
         'C': '#FFDC00'  // Yellow
     };
+
+    function calculateCircleCoordinates(index, total) {
+        const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
+        const x = circleRadius * Math.cos(angle) + rnaCanvas.width / 2;
+        const y = circleRadius * Math.sin(angle) + rnaCanvas.height / 2;
+        return {x, y};
+    }
+
+    function renderRNACircle() {
+        rnaCtx.clearRect(0, 0, rnaCanvas.width, rnaCanvas.height);
+
+        // Apply camera translation and scale
+        rnaCtx.save();
+        rnaCtx.translate(cameraX, cameraY);
+        rnaCtx.scale(scale, scale);
+
+
+        // Draw connecting lines and nucleotides
+        [...sequence].forEach((nucleotide, index) => {
+            const {x, y} = calculateCircleCoordinates(index, sequence.length);
+
+            // Draw connecting line to next nucleotide
+            if (index < sequence.length - 1) {
+                const nextPos = calculateCircleCoordinates(index + 1, sequence.length);
+                rnaCtx.beginPath();
+                rnaCtx.moveTo(x, y);
+                rnaCtx.lineTo(nextPos.x, nextPos.y);
+                rnaCtx.strokeStyle = '#666';
+                rnaCtx.lineWidth = 2;
+                rnaCtx.stroke();
+            }
+
+            // Draw nucleotide
+            rnaCtx.beginPath();
+            rnaCtx.arc(x, y, nucleotideRadius, 0, Math.PI * 2);
+            rnaCtx.fillStyle = nucleotideColors[nucleotide];
+            rnaCtx.fill();
+
+            rnaCtx.fillStyle = 'black';
+            rnaCtx.font = '12px monospace';
+            rnaCtx.textAlign = 'center';
+            rnaCtx.textBaseline = 'middle';
+            rnaCtx.fillText(nucleotide, x, y);
+
+            // Draw index numbers for every 10th nucleotide
+            if ((index + 1) % 10 === 0) {
+                const labelRadius = circleRadius + 30;
+                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
+                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
+                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
+                rnaCtx.fillStyle = 'white';
+                rnaCtx.fillText(index + 1, labelX, labelY);
+            }
+
+            // Add 3' and 5' labels
+            if (index === 0) {
+                const labelRadius = circleRadius + 50;
+                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
+                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
+                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
+                rnaCtx.fillStyle = 'white';
+                rnaCtx.fillText("5'", labelX, labelY);
+            } else if (index === sequence.length - 1) {
+                const labelRadius = circleRadius + 50;
+                const labelAngle = (index / sequence.length) * Math.PI * 2 - Math.PI / 2;
+                const labelX = labelRadius * Math.cos(labelAngle) + rnaCanvas.width / 2;
+                const labelY = labelRadius * Math.sin(labelAngle) + rnaCanvas.height / 2;
+                rnaCtx.fillStyle = 'white';
+                rnaCtx.fillText("3'", labelX, labelY);
+            }
+        });
+        rnaCtx.restore();
+    }
 
     function calculateStats() {
         const stats = {
@@ -366,6 +453,7 @@
                     sequence = sequence.slice(0, index) + sequence.slice(index + 1);
                     renderSequence();
                     renderLeftPanel();
+                    renderRNACircle();
                 } else {
                     selectedNucleotide = index;
                     renderSequence();
@@ -395,11 +483,75 @@
             sequenceCanvas.width = Math.max(document.getElementById('rnaSequence').offsetWidth - 10, sequence.length * spacing + 80);
             renderSequence();
             renderLeftPanel();
+            renderRNACircle();
         }
     });
 
     renderSequence();
     renderLeftPanel();
+    renderRNACircle();
+
+    // Handle RNA canvas resize
+    window.addEventListener('resize', () => {
+        rnaCanvas.width = rnaCanvas.parentElement.offsetWidth;
+        rnaCanvas.height = rnaCanvas.parentElement.offsetHeight;
+        renderRNACircle();
+    });
+
+    // Mouse event handlers for camera movement
+    rnaCanvas.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        lastMouseX = e.clientX;
+        lastMouseY = e.clientY;
+        rnaCanvas.style.cursor = 'grabbing';
+    });
+
+    rnaCanvas.addEventListener('mousemove', (e) => {
+        if (isDragging) {
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            cameraX += deltaX;
+            cameraY += deltaY;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            renderRNACircle();
+        }
+    });
+
+    rnaCanvas.addEventListener('mouseup', () => {
+        isDragging = false;
+        rnaCanvas.style.cursor = 'grab';
+    });
+
+    rnaCanvas.addEventListener('mouseleave', () => {
+        isDragging = false;
+        rnaCanvas.style.cursor = 'grab';
+    });
+
+    rnaCanvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = -Math.sign(e.deltaY) * 0.1;
+        const newScale = Math.min(Math.max(scale + delta, minScale), maxScale);
+
+        // Get mouse position relative to canvas
+        const rect = rnaCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Adjust camera position to zoom towards mouse position
+        const scaleFactor = newScale / scale;
+        cameraX = mouseX - (mouseX - cameraX) * scaleFactor;
+        cameraY = mouseY - (mouseY - cameraY) * scaleFactor;
+
+        scale = newScale;
+        renderRNACircle();
+    });
+
+    // Initial RNA canvas setup
+    rnaCanvas.width = rnaCanvas.parentElement.offsetWidth;
+    rnaCanvas.height = rnaCanvas.parentElement.offsetHeight;
+    rnaCanvas.style.cursor = 'grab';
+    renderRNACircle();
 
     document.getElementById('cutterTool').addEventListener('click', () => {
         cutterMode = !cutterMode;
@@ -421,6 +573,7 @@
             nucleotideCounts[nucleotide]++;
             renderSequence();
             renderLeftPanel();
+            renderRNACircle();
         }
     });
 </script>
